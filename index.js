@@ -4,6 +4,8 @@ const consultoriosRouter = require('./routes/consultorios')
 const usuariosRouter = require('./routes/usuarios')
 const citasRouter = require('./routes/citas')
 
+
+app.use(express.json())
 app.use('/api/consultorios', consultoriosRouter)
 app.use('/api/usuarios', usuariosRouter)
 app.use('/api/citas', citasRouter)
