@@ -1,5 +1,7 @@
 const express = require('express')
 const app = express()
+const cors = require('cors');
+app.use(cors({ origin: 'http://localhost:5173' }));
 const consultoriosRouter = require('./routes/consultorios')
 const usuariosRouter = require('./routes/usuarios')
 const citasRouter = require('./routes/citas')
