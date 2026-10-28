@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt'); // si instalaste bcryptjs: require('bcryptjs')
 const prisma = require('../lib/prisma');
+const { autenticar, soloRol } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -16,7 +17,7 @@ const usuarioSeguro = {
 };
 
 // GET /api/usuarios -> listar todos
-router.get('/', async (req, res) => {
+router.get('/', autenticar, soloRol('ADMIN'), async (req, res) => {
   try {
     const usuarios = await prisma.usuario.findMany({
       select: usuarioSeguro,
@@ -30,7 +31,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/usuarios/:id -> uno solo
-router.get('/:id', async (req, res) => {
+router.get('/:id', autenticar, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -52,7 +53,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/usuarios -> registro
-router.post('/', async (req, res) => {
+router.post('/', autenticar, soloRol('ADMIN'), async (req, res) => {
   try {
     const { nombre, email, password, telefono } = req.body;
 
@@ -90,7 +91,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/usuarios/:id -> actualizar
-router.put('/:id', async (req, res) => {
+router.put('/:id', autenticar, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -132,7 +133,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/usuarios/:id -> eliminar
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', autenticar, soloRol('ADMIN'), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
