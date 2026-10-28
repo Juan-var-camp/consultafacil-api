@@ -1,6 +1,6 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
-
+const { autenticar, soloRol } = require('../middleware/auth');
 const router = express.Router();
 
 // GET /api/consultorios -> listar todos
@@ -36,7 +36,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/consultorios -> crear
-router.post('/', async (req, res) => {
+router.post('/', autenticar, soloRol('ADMIN'), async (req, res) => {
   try {
     const { nombre, especialidad, direccion, telefono, email, descripcion } = req.body;
 
@@ -57,7 +57,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/consultorios/:id -> actualizar
-router.put('/:id', async (req, res) => {
+router.put('/:id', autenticar, soloRol('ADMIN'), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -81,7 +81,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/consultorios/:id -> eliminar
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', autenticar, soloRol('ADMIN'), async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
