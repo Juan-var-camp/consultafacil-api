@@ -1,6 +1,6 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
-
+const { esHorarioValido } = require('../lib/horarios');
 const { autenticar, soloRol } = require('../middleware/auth');
 const router = express.Router();
 
@@ -111,6 +111,12 @@ router.post('/', autenticar, async (req, res) => {
     }
     if (fechaCita <= new Date()) {
       return res.status(400).json({ error: 'La fecha debe ser futura' });
+    }
+
+    if (!esHorarioValido(fechaCita)) {
+      return res.status(400).json({
+        error: 'La hora debe ser un bloque de 30 minutos entre 8:00-12:00 o 14:00-18:00',
+      });
     }
 
     const paciente = await prisma.usuario.findUnique({

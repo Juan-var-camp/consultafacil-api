@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { autenticar, soloRol } = require('../middleware/auth');
+const { fechaValida, generarHorarios, DURACION_MIN } = require('../lib/horarios');
 const router = express.Router();
 
 // GET /api/consultorios -> listar todos
@@ -13,6 +14,55 @@ router.get('/', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener los consultorios' });
+  }
+});
+
+router.get('/:id/disponibilidad', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { fecha } = req.query;
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+    if (!fecha || !fechaValida(fecha)) {
+      return res.status(400).json({ error: 'fecha debe tener el formato AAAA-MM-DD' });
+    }
+
+    const consultorio = await prisma.consultorio.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!consultorio) {
+      return res.status(404).json({ error: 'Consultorio no encontrado' });
+    }
+
+    const horarios = generarHorarios(fecha);
+
+    // Citas activas (no canceladas) que caen en alguno de esos bloques
+    const ocupadas = await prisma.cita.findMany({
+      where: {
+        consultorioId: id,
+        estado: { not: 'CANCELADA' },
+        fecha: { in: horarios },
+      },
+      select: { fecha: true },
+    });
+    const ocupadasMs = new Set(ocupadas.map((c) => c.fecha.getTime()));
+    const ahora = Date.now();
+
+    res.json({
+      fecha,
+      duracionMin: DURACION_MIN,
+      horarios: horarios.map((h) => ({
+        inicio: h.toISOString(),
+        // libre = no ocupado y todavía en el futuro
+        libre: h.getTime() > ahora && !ocupadasMs.has(h.getTime()),
+      })),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al obtener la disponibilidad' });
   }
 });
 
