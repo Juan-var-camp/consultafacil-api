@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 
+const { autenticar, soloRol } = require('../middleware/auth');
 const router = express.Router();
 
 const ESTADOS = ['PENDIENTE', 'CONFIRMADA', 'CANCELADA', 'COMPLETADA'];
@@ -10,6 +11,13 @@ const incluirRelaciones = {
   paciente: { select: { id: true, nombre: true, email: true, telefono: true } },
   consultorio: { select: { id: true, nombre: true, especialidad: true, direccion: true } },
 };
+
+function puedeAccederCita(usuario, cita) {
+  if (usuario.rol === 'ADMIN') return true;
+  if (usuario.rol === 'PACIENTE') return cita.pacienteId === usuario.id;
+  if (usuario.rol === 'MEDICO') return cita.consultorioId === usuario.consultorioId;
+  return false;
+}
 
 // Devuelve true si ya hay una cita activa en ese consultorio y horario
 async function hayConflicto(consultorioId, fecha, excluirId = null) {
@@ -25,18 +33,26 @@ async function hayConflicto(consultorioId, fecha, excluirId = null) {
 }
 
 // GET /api/citas -> listar (filtros opcionales: ?pacienteId=1&consultorioId=2&estado=PENDIENTE)
-router.get('/', async (req, res) => {
+router.get('/', autenticar, async (req, res) => {
   try {
     const { pacienteId, consultorioId, estado } = req.query;
     const where = {};
 
-    if (pacienteId) where.pacienteId = Number(pacienteId);
-    if (consultorioId) where.consultorioId = Number(consultorioId);
-    if (estado) {
-      if (!ESTADOS.includes(estado)) {
+    if (req.usuario.rol === 'PACIENTE') {
+      where.pacienteId = req.usuario.id;
+    } else if (req.usuario.rol === 'MEDICO') {
+      where.consultorioId = req.usuario.consultorioId;
+    } else {
+      // ADMIN: puede filtrar libremente
+      if (req.query.pacienteId) where.pacienteId = Number(req.query.pacienteId);
+      if (req.query.consultorioId) where.consultorioId = Number(req.query.consultorioId);
+    }
+
+    if (req.query.estado) {
+      if (!ESTADOS.includes(req.query.estado)) {
         return res.status(400).json({ error: 'Estado inválido' });
       }
-      where.estado = estado;
+      where.estado = req.query.estado;
     }
 
     const citas = await prisma.cita.findMany({
@@ -52,7 +68,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/citas/:id -> una sola
-router.get('/:id', async (req, res) => {
+router.get('/:id', autenticar, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -66,6 +82,10 @@ router.get('/:id', async (req, res) => {
     if (!cita) {
       return res.status(404).json({ error: 'Cita no encontrada' });
     }
+    if (!puedeAccederCita(req.usuario, cita)) {
+      return res.status(403).json({ error: 'No tienes permisos sobre esta cita' });
+    }
+
     res.json(cita);
   } catch (error) {
     console.error(error);
@@ -74,13 +94,14 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/citas -> agendar
-router.post('/', async (req, res) => {
+router.post('/', autenticar, async (req, res) => {
   try {
-    const { pacienteId, consultorioId, fecha, motivo } = req.body;
+    const { consultorioId, fecha, motivo } = req.body;
+    const pacienteId = req.usuario.id;
 
-    if (!pacienteId || !consultorioId || !fecha) {
+    if (!consultorioId || !fecha) {
       return res.status(400).json({
-        error: 'pacienteId, consultorioId y fecha son obligatorios',
+        error: 'consultorioId y fecha son obligatorios',
       });
     }
 
@@ -130,7 +151,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/citas/:id -> actualizar fecha, motivo o estado
-router.put('/:id', async (req, res) => {
+router.put('/:id', autenticar, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -141,8 +162,17 @@ router.put('/:id', async (req, res) => {
     if (!cita) {
       return res.status(404).json({ error: 'Cita no encontrada' });
     }
+    if (!puedeAccederCita(req.usuario, cita)) {
+      return res.status(403).json({ error: 'No tienes permisos sobre esta cita' });
+    }
+
 
     const { fecha, motivo, estado } = req.body;
+
+    if (estado !== undefined && req.usuario.rol === 'PACIENTE') {
+      return res.status(403).json({ error: 'Solo el consultorio puede cambiar el estado' });
+    }
+
     const data = {};
 
     if (motivo !== undefined) data.motivo = motivo;
@@ -189,7 +219,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // PATCH /api/citas/:id/cancelar -> atajo para cancelar
-router.patch('/:id/cancelar', async (req, res) => {
+router.patch('/:id/cancelar', autenticar, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -199,6 +229,9 @@ router.patch('/:id/cancelar', async (req, res) => {
     const cita = await prisma.cita.findUnique({ where: { id } });
     if (!cita) {
       return res.status(404).json({ error: 'Cita no encontrada' });
+    }
+    if (!puedeAccederCita(req.usuario, cita)) {
+      return res.status(403).json({ error: 'No tienes permisos sobre esta cita' });
     }
     if (cita.estado === 'CANCELADA' || cita.estado === 'COMPLETADA') {
       return res.status(409).json({
@@ -219,7 +252,7 @@ router.patch('/:id/cancelar', async (req, res) => {
 });
 
 // DELETE /api/citas/:id -> eliminar
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', autenticar, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {

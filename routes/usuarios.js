@@ -38,6 +38,10 @@ router.get('/:id', autenticar, async (req, res) => {
       return res.status(400).json({ error: 'ID inválido' });
     }
 
+    if (req.usuario.id !== id && req.usuario.rol !== 'ADMIN') {
+      return res.status(403).json({ error: 'No tienes permisos para esta acción' });
+    }
+
     const usuario = await prisma.usuario.findUnique({
       where: { id },
       select: usuarioSeguro,
@@ -96,6 +100,10 @@ router.put('/:id', autenticar, async (req, res) => {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
       return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    if (req.usuario.id !== id && req.usuario.rol !== 'ADMIN') {
+      return res.status(403).json({ error: 'No tienes permisos para esta acción' });
     }
 
     const { nombre, email, password, telefono } = req.body;
