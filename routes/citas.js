@@ -6,6 +6,13 @@ const router = express.Router();
 
 const ESTADOS = ['PENDIENTE', 'CONFIRMADA', 'CANCELADA', 'COMPLETADA'];
 
+const TRANSICIONES = {
+  PENDIENTE: ['CONFIRMADA', 'CANCELADA'],
+  CONFIRMADA: ['COMPLETADA', 'CANCELADA'],
+  CANCELADA: [],
+  COMPLETADA: [],
+};
+
 // Datos que se incluyen de las relaciones (sin password del paciente)
 const incluirRelaciones = {
   paciente: { select: { id: true, nombre: true, email: true, telefono: true } },
@@ -190,6 +197,12 @@ router.put('/:id', autenticar, async (req, res) => {
           error: `Estado inválido. Valores permitidos: ${ESTADOS.join(', ')}`,
         });
       }
+      if (estado !== cita.estado && !TRANSICIONES[cita.estado].includes(estado)) {
+        return res.status(409).json({
+          error: `No se puede pasar una cita de ${cita.estado.toLowerCase()} a ${estado.toLowerCase()}`,
+        });
+      }
+
       data.estado = estado;
     }
 
