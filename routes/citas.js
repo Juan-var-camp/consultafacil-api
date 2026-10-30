@@ -113,14 +113,8 @@ router.post('/', autenticar, async (req, res) => {
       return res.status(400).json({ error: 'La fecha debe ser futura' });
     }
 
-    if (!(await esHorarioValido(consultorio.id, fechaCita))) {
-      return res.status(400).json({
-        error: 'Esa hora no está dentro de la atención del consultorio',
-      });
-    }
-
     const paciente = await prisma.usuario.findUnique({
-      where: { id: Number(pacienteId) },
+      where: { id: pacienteId },
     });
     if (!paciente) {
       return res.status(404).json({ error: 'Paciente no encontrado' });
@@ -131,6 +125,13 @@ router.post('/', autenticar, async (req, res) => {
     });
     if (!consultorio) {
       return res.status(404).json({ error: 'Consultorio no encontrado' });
+    }
+
+    // Aquí sí: el consultorio ya existe, y se valida contra SU horario
+    if (!(await esHorarioValido(consultorio.id, fechaCita))) {
+      return res.status(400).json({
+        error: 'Esa hora no está dentro de la atención del consultorio',
+      });
     }
 
     if (await hayConflicto(consultorio.id, fechaCita)) {
