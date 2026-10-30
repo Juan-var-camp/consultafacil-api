@@ -36,6 +36,8 @@ model Consultorio {
   email        String?
   descripcion  String?
   creadoEn     DateTime  @default(now())
+  duracionCita Int       @default(30)
+  horarios     Horario[]
 
   medicos      Usuario[]
   citas        Cita[]
@@ -66,4 +68,14 @@ model Cita {
   paciente      Usuario     @relation(fields: [pacienteId], references: [id])
   consultorioId Int
   consultorio   Consultorio @relation(fields: [consultorioId], references: [id])
+}
+
+model Horario {
+  id            Int         @id @default(autoincrement())
+  diaSemana     Int         // 0 = domingo, 1 = lunes ... 6 = sábado
+  horaInicio    String      // "08:00"
+  horaFin       String      // "12:00"
+
+  consultorioId Int
+  consultorio   Consultorio @relation(fields: [consultorioId], references: [id], onDelete: Cascade)
 }

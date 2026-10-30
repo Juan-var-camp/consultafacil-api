@@ -113,9 +113,9 @@ router.post('/', autenticar, async (req, res) => {
       return res.status(400).json({ error: 'La fecha debe ser futura' });
     }
 
-    if (!esHorarioValido(fechaCita)) {
+    if (!(await esHorarioValido(consultorio.id, fechaCita))) {
       return res.status(400).json({
-        error: 'La hora debe ser un bloque de 30 minutos entre 8:00-12:00 o 14:00-18:00',
+        error: 'Esa hora no está dentro de la atención del consultorio',
       });
     }
 
@@ -199,6 +199,11 @@ router.put('/:id', autenticar, async (req, res) => {
       }
       if (fechaCita <= new Date()) {
         return res.status(400).json({ error: 'La fecha debe ser futura' });
+      }
+      if (!(await esHorarioValido(cita.consultorioId, fechaCita))) {
+        return res.status(400).json({
+          error: 'Esa hora no está dentro de la atención del consultorio',
+        });
       }
       if (await hayConflicto(cita.consultorioId, fechaCita, id)) {
         return res.status(409).json({
