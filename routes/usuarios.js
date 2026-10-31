@@ -16,6 +16,8 @@ const usuarioSeguro = {
   consultorioId: true,
 };
 
+const ROLES = ['PACIENTE', 'MEDICO', 'ADMIN'];
+
 // GET /api/usuarios -> listar todos
 router.get('/', autenticar, soloRol('ADMIN'), async (req, res) => {
   try {
@@ -161,6 +163,56 @@ router.delete('/:id', autenticar, soloRol('ADMIN'), async (req, res) => {
     }
     console.error(error);
     res.status(500).json({ error: 'Error al eliminar el usuario' });
+  }
+});
+
+// PATCH /api/usuarios/:id/acceso -> cambiar rol y consultorio (solo ADMIN)
+router.patch('/:id/acceso', autenticar, soloRol('ADMIN'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+
+    const { rol, consultorioId } = req.body;
+    if (!ROLES.includes(rol)) {
+      return res.status(400).json({ error: `Rol inválido. Valores permitidos: ${ROLES.join(', ')}` });
+    }
+
+    // Evita que el último admin se quite el acceso por accidente
+    if (id === req.usuario.id && rol !== 'ADMIN') {
+      return res.status(400).json({ error: 'No puedes quitarte tu propio rol de administrador' });
+    }
+
+    // Solo los médicos pertenecen a un consultorio; para los demás roles se limpia
+    let consultorioFinal = null;
+    if (rol === 'MEDICO') {
+      const numero = Number(consultorioId);
+      if (consultorioId == null || !Number.isInteger(numero)) {
+        return res.status(400).json({ error: 'Un médico debe tener un consultorio asignado' });
+      }
+      const existe = await prisma.consultorio.findUnique({
+        where: { id: numero },
+        select: { id: true },
+      });
+      if (!existe) {
+        return res.status(404).json({ error: 'Consultorio no encontrado' });
+      }
+      consultorioFinal = numero;
+    }
+
+    const actualizado = await prisma.usuario.update({
+      where: { id },
+      data: { rol, consultorioId: consultorioFinal },
+      select: usuarioSeguro,
+    });
+    res.json(actualizado);
+  } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    console.error(error);
+    res.status(500).json({ error: 'Error al cambiar el acceso' });
   }
 });
 
