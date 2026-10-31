@@ -3,6 +3,17 @@ const prisma = require('../lib/prisma');
 const { esHorarioValido } = require('../lib/horarios');
 const { autenticar, soloRol } = require('../middleware/auth');
 const router = express.Router();
+const { enviarCorreo } = require('../lib/correo');
+const { citaAgendada, citaConfirmada, citaCancelada } = require('../lib/plantillas');
+
+const UN_DIA_MS = 24 * 60 * 60 * 1000;
+
+// Envía sin esperar y sin dejar que un fallo del correo afecte la respuesta
+function notificar(cita, plantilla) {
+  enviarCorreo({ para: cita.paciente.email, ...plantilla(cita) }).catch((error) =>
+    console.error('No se pudo enviar el correo:', error.message)
+  );
+}
 
 const ESTADOS = ['PENDIENTE', 'CONFIRMADA', 'CANCELADA', 'COMPLETADA'];
 
@@ -154,9 +165,11 @@ router.post('/', autenticar, async (req, res) => {
         motivo,
         pacienteId: paciente.id,
         consultorioId: consultorio.id,
+        recordatorioEnviado: fechaCita.getTime() - Date.now() < UN_DIA_MS,
       },
       include: incluirRelaciones,
     });
+    notificar(nueva, citaAgendada);
     res.status(201).json(nueva);
   } catch (error) {
     console.error(error);
@@ -224,6 +237,9 @@ router.put('/:id', autenticar, async (req, res) => {
           error: 'Ya existe una cita en ese consultorio a esa hora',
         });
       }
+
+      data.recordatorioEnviado = fechaCita.getTime() - Date.now() < UN_DIA_MS;
+
       data.fecha = fechaCita;
     }
 
@@ -233,6 +249,13 @@ router.put('/:id', autenticar, async (req, res) => {
       data,
       include: incluirRelaciones,
     });
+
+    if (estado === 'CONFIRMADA' && cita.estado !== 'CONFIRMADA') {
+      notificar(actualizada, citaConfirmada);
+    }
+    if (estado === 'CANCELADA' && cita.estado !== 'CANCELADA' && req.usuario.id !== actualizada.pacienteId) {
+      notificar(actualizada, citaCancelada);
+    }
     res.json(actualizada);
   } catch (error) {
     if (error.code === 'P2025') {
@@ -269,6 +292,9 @@ router.patch('/:id/cancelar', autenticar, async (req, res) => {
       data: { estado: 'CANCELADA' },
       include: incluirRelaciones,
     });
+    if (req.usuario.id !== cancelada.pacienteId) {
+      notificar(cancelada, citaCancelada);
+    }
     res.json(cancelada);
   } catch (error) {
     console.error(error);

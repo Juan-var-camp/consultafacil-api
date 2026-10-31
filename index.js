@@ -7,11 +7,13 @@ const authRouter = require('./routes/auth');
 const consultoriosRouter = require('./routes/consultorios');
 const usuariosRouter = require('./routes/usuarios');
 const citasRouter = require('./routes/citas');
+const { verificarCorreo } = require('./lib/correo');
+const { iniciarRecordatorios } = require('./jobs/recordatorios');
 
 const app = express();
 
 // 1. Middlewares generales (siempre primero)
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
 app.use(express.json());
 
 // 2. Rutas
@@ -26,4 +28,6 @@ app.get('/', (req, res) => {
 
 app.listen(3000, () => {
   console.log('Servidor corriendo en http://localhost:3000');
+  verificarCorreo();
+  iniciarRecordatorios();
 });

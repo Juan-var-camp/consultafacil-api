@@ -68,6 +68,7 @@ model Cita {
   paciente      Usuario     @relation(fields: [pacienteId], references: [id])
   consultorioId Int
   consultorio   Consultorio @relation(fields: [consultorioId], references: [id])
+  recordatorioEnviado Boolean @default(false)
 }
 
 model Horario {
